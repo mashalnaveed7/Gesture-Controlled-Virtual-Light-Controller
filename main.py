@@ -15,8 +15,14 @@ def main():
     recognizer = GestureRecognizer()
     light = LightController()
 
-    print("Light Controller (ON/OFF + Brightness + Position) started.")
-    print("Press 'Q' to quit.")
+    # Track previous gesture to detect a fresh TWO_FINGERS trigger
+    # This prevents cycling colors every single frame while held
+    previous_gesture = "NONE"
+
+    print(
+        "Light Controller (ON/OFF + Brightness + Movement + Color) "
+        "started. Press 'Q' to quit."
+    )
 
     while True:
         success, frame = cap.read()
@@ -34,6 +40,7 @@ def main():
         # Get hand landmarks
         landmarks = tracker.get_landmark_positions(frame)
 
+        # Default gesture
         gesture = "NONE"
 
         if landmarks:
@@ -76,10 +83,20 @@ def main():
             elif gesture == "INDEX":
                 # Move virtual light using index fingertip
                 index_tip = landmarks[8]
+
                 light.set_position(
                     index_tip[1],
                     index_tip[2]
                 )
+
+            elif gesture == "TWO_FINGERS":
+                # Only trigger once when TWO_FINGERS is first detected.
+                # This prevents changing color every frame while held.
+                if previous_gesture != "TWO_FINGERS":
+                    light.next_color()
+
+            # Update previous gesture for the next frame
+            previous_gesture = gesture
 
         # -----------------------------------
         # On-screen information panel
@@ -91,7 +108,7 @@ def main():
         cv2.rectangle(
             frame,
             (0, 0),
-            (350, 195),
+            (350, 225),
             (0, 0, 0),
             -1
         )
@@ -148,11 +165,22 @@ def main():
             2
         )
 
+        # Color
+        cv2.putText(
+            frame,
+            f"Color: {status['color']}",
+            (10, 165),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 255),
+            2
+        )
+
         # Quit instruction
         cv2.putText(
             frame,
             "Press 'Q' to Quit",
-            (10, 170),
+            (10, 200),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
             (0, 200, 0),
