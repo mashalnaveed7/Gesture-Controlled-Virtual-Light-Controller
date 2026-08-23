@@ -62,5 +62,6 @@ class LightController:
             "on": self.is_on,
             "brightness": self.brightness,
             "position": self.position,
-            "color": self.get_color_name()
+            "color": self.get_color_name(),
+            "color_rgb": self.get_color_rgb()
         }
