@@ -15,7 +15,8 @@ def main():
     recognizer = GestureRecognizer()
     light = LightController()
 
-    print("Light Controller (ON/OFF + Brightness) started. Press 'Q' to quit.")
+    print("Light Controller (ON/OFF + Brightness + Position) started.")
+    print("Press 'Q' to quit.")
 
     while True:
         success, frame = cap.read()
@@ -72,6 +73,14 @@ def main():
                 if brightness is not None:
                     light.set_brightness(brightness)
 
+            elif gesture == "INDEX":
+                # Move virtual light using index fingertip
+                index_tip = landmarks[8]
+                light.set_position(
+                    index_tip[1],
+                    index_tip[2]
+                )
+
         # -----------------------------------
         # On-screen information panel
         # -----------------------------------
@@ -82,7 +91,7 @@ def main():
         cv2.rectangle(
             frame,
             (0, 0),
-            (350, 160),
+            (350, 195),
             (0, 0, 0),
             -1
         )
@@ -128,11 +137,22 @@ def main():
             2
         )
 
+        # Position
+        cv2.putText(
+            frame,
+            f"Position: {status['position']}",
+            (10, 135),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 255),
+            2
+        )
+
         # Quit instruction
         cv2.putText(
             frame,
             "Press 'Q' to Quit",
-            (10, 135),
+            (10, 170),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
             (0, 200, 0),
