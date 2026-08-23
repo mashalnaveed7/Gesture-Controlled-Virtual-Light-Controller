@@ -2,29 +2,50 @@ import cv2
 from hand_tracking import HandTracker
 from gesture_recognition import GestureRecognizer
 from light_controller import LightController
+from virtual_room import VirtualRoom
 
 
 def main():
+    print("CHECKPOINT 1: Starting webcam...")
+
     cap = cv2.VideoCapture(0)
 
     if not cap.isOpened():
         print("Error: Could not open webcam.")
         return
 
+    print("CHECKPOINT 2: Webcam opened. Initializing tracker/recognizer...")
+
     tracker = HandTracker(max_hands=1)
     recognizer = GestureRecognizer()
-    light = LightController()
 
-    # Track previous gesture to detect a fresh TWO_FINGERS trigger
-    # This prevents cycling colors every single frame while held
-    previous_gesture = "NONE"
+    print("CHECKPOINT 3: Creating VirtualRoom (Pygame window)...")
 
-    print(
-        "Light Controller (ON/OFF + Brightness + Movement + Color) "
-        "started. Press 'Q' to quit."
+    room = VirtualRoom(1280, 720)
+
+    print("CHECKPOINT 4: VirtualRoom created successfully.")
+
+    room_area_w = room.room_w
+    room_area_h = room.height - room.header_h - room.footer_h
+
+    light = LightController(
+        screen_width=room_area_w,
+        screen_height=room_area_h
     )
 
-    while True:
+    light.set_position(
+        room_area_w // 2,
+        room_area_h // 2
+    )
+
+    print("CHECKPOINT 5: Entering main loop...")
+
+    previous_gesture = "NONE"
+    fps = 0
+
+    running = True
+
+    while running:
         success, frame = cap.read()
 
         if not success:
@@ -40,7 +61,6 @@ def main():
         # Get hand landmarks
         landmarks = tracker.get_landmark_positions(frame)
 
-        # Default gesture
         gesture = "NONE"
 
         if landmarks:
@@ -50,7 +70,7 @@ def main():
             # Get index fingertip
             index_tip = landmarks[8]
 
-            # Draw circle on index fingertip
+            # Draw fingertip marker
             cv2.circle(
                 frame,
                 (index_tip[1], index_tip[2]),
@@ -76,131 +96,79 @@ def main():
                 # Convert distance to brightness
                 brightness = recognizer.distance_to_brightness(distance)
 
-                # Set light brightness
                 if brightness is not None:
                     light.set_brightness(brightness)
 
             elif gesture == "INDEX":
-                # Move virtual light using index fingertip
-                index_tip = landmarks[8]
+                # Convert webcam coordinates to room coordinates
+                frame_h, frame_w = frame.shape[:2]
 
-                light.set_position(
-                    index_tip[1],
-                    index_tip[2]
+                room_x = int(
+                    (index_tip[1] / frame_w) * room_area_w
                 )
 
+                room_y = int(
+                    (index_tip[2] / frame_h) * room_area_h
+                )
+
+                # Move virtual light
+                light.set_position(room_x, room_y)
+
             elif gesture == "TWO_FINGERS":
-                # Only trigger once when TWO_FINGERS is first detected.
-                # This prevents changing color every frame while held.
+                # Change color only once when gesture first appears
                 if previous_gesture != "TWO_FINGERS":
                     light.next_color()
 
-            # Update previous gesture for the next frame
+            # Store current gesture for next frame
             previous_gesture = gesture
 
         # -----------------------------------
-        # On-screen information panel
+        # Get current light status
         # -----------------------------------
 
         status = light.get_status()
 
-        # Black information panel
-        cv2.rectangle(
+        # -----------------------------------
+        # Convert light position to display coordinates
+        # -----------------------------------
+
+        display_status = dict(status)
+
+        display_status["position"] = [
+            status["position"][0] + room.cam_w,
+            status["position"][1] + room.header_h
+        ]
+
+        # -----------------------------------
+        # Virtual Room events and rendering
+        # -----------------------------------
+
+        running = room.handle_events()
+
+        fps = room.tick(30)
+
+        room.render(
             frame,
-            (0, 0),
-            (350, 225),
-            (0, 0, 0),
-            -1
+            gesture,
+            display_status,
+            fps
         )
 
-        # Gesture
-        cv2.putText(
-            frame,
-            f"Gesture: {gesture}",
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 255, 255),
-            2
-        )
+    # -----------------------------------
+    # Cleanup
+    # -----------------------------------
 
-        # Light ON/OFF status
-        light_status_text = "ON" if status["on"] else "OFF"
-
-        light_status_color = (
-            (0, 255, 0)
-            if status["on"]
-            else (0, 0, 255)
-        )
-
-        cv2.putText(
-            frame,
-            f"Light: {light_status_text}",
-            (10, 65),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            light_status_color,
-            2
-        )
-
-        # Brightness
-        cv2.putText(
-            frame,
-            f"Brightness: {status['brightness']}%",
-            (10, 100),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 255),
-            2
-        )
-
-        # Position
-        cv2.putText(
-            frame,
-            f"Position: {status['position']}",
-            (10, 135),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 255, 255),
-            2
-        )
-
-        # Color
-        cv2.putText(
-            frame,
-            f"Color: {status['color']}",
-            (10, 165),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 255, 255),
-            2
-        )
-
-        # Quit instruction
-        cv2.putText(
-            frame,
-            "Press 'Q' to Quit",
-            (10, 200),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (0, 200, 0),
-            1
-        )
-
-        # Display window
-        cv2.imshow(
-            "Gesture Controlled Virtual Light Controller",
-            frame
-        )
-
-        # Quit when Q is pressed
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    # Release resources
     cap.release()
-    cv2.destroyAllWindows()
+    room.quit()
 
 
 if __name__ == "__main__":
-    main()
+    import traceback
+
+    try:
+        main()
+
+    except Exception as e:
+        print("=== CRASH DETECTED ===")
+        traceback.print_exc()
+        input("Press Enter to exit...")
