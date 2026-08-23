@@ -51,7 +51,7 @@ class GestureRecognizer:
     def recognize_gesture(self, landmarks):
         """
         Returns a gesture label string based on finger states.
-        Currently supports: OPEN_PALM, FIST, INDEX, PINCH
+        Currently supports: OPEN_PALM, FIST, INDEX, PINCH, TWO_FINGERS
         """
         fingers = self.get_finger_states(landmarks)
 
@@ -68,6 +68,10 @@ class GestureRecognizer:
         distance = self.get_pinch_distance(landmarks)
         if distance is not None and distance < self.pinch_threshold and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 0:
             return "PINCH"
+
+        # Two Fingers: index + middle extended, thumb/ring/pinky folded
+        if fingers[1] == 1 and fingers[2] == 1 and fingers[0] == 0 and fingers[3] == 0 and fingers[4] == 0:
+            return "TWO_FINGERS"
 
         # Index: only the index finger extended
         if fingers[1] == 1 and fingers[0] == 0 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 0:
